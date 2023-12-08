@@ -1,0 +1,30 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaUser
+metadata:
+  name: usr-teste
+  labels:
+    strimzi.io/cluster: vibra
+spec:
+  authentication:
+    type: scram-sha-512
+  authorization:
+    type: simple
+    acls:
+      # Topics and groups used by the HTTP clients through the HTTP Bridge
+      # Change to match the topics used by your HTTP clients
+      - resource:
+          type: topic
+          name: src-teste
+        operation: Read
+      - resource:
+          type: topic
+          name: src-teste
+        operation: Describe
+      - resource:
+          type: topic
+          name: src-teste
+        operation: Write
+      - resource:
+          type: topic
+          name: src-teste
+        operation: Create
