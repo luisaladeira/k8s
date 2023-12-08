@@ -5,7 +5,7 @@ metadata:
   # This name uniquely identifies the Deployment
   name: airbyte-minio
   annotations:
-    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook: pre-install
     helm.sh/hook-weight: "-1"
   labels:
     {{ include "airbyte.minioLabels" . | nindent 4 }}
@@ -21,7 +21,7 @@ spec:
           accessModes: [ "ReadWriteOnce" ]
           resources:
             requests:
-              storage: 500Mi
+              storage: {{ .Values.minio.storage.volumeClaimValue  }}
   template:
     metadata:
       labels:
@@ -32,7 +32,7 @@ spec:
       containers:
         - name: airbyte-minio
           # Pulls the default Minio image from Docker Hub
-          image: minio/minio:latest
+          image: "{{ .Values.minio.image.repository }}:{{ .Values.minio.image.tag }}"
           args:
             - server
             - /storage
@@ -47,7 +47,20 @@ spec:
           # Mount the volume into the pod
           volumeMounts:
             - name: airbyte-minio-pv-claim # must match the volume name, above
-              mountPath: "/data"
+              mountPath: "/storage"
+      {{- with .Values.minio.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.minio.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.minio.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
 ---
 apiVersion: v1
 kind: Service
@@ -56,7 +69,7 @@ metadata:
   labels:
     {{ include "airbyte.minioLabels" . | nindent 4 }}
   annotations:
-    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook: pre-install
     helm.sh/hook-weight: "-1"
 spec:
   ports:
@@ -65,4 +78,30 @@ spec:
       protocol: TCP
   selector:
     {{ include "airbyte.minioSelectorLabels" . | nindent 4 }}
-{{- end }}
+---
+# This pod creates the state-storage bucket in the minio server,
+# which the local cloud deployment requires to store its state.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: airbyte-minio-create-bucket
+  annotations:
+    "helm.sh/hook": post-install, post-upgrade
+    "helm.sh/hook-delete-policy": hook-succeeded, before-hook-creation
+spec:
+  restartPolicy: OnFailure
+  containers:
+    - name: minio-mc
+      image: minio/mc
+      command: ["/bin/sh", "-c",
+        "until (/usr/bin/mc config host add myminio $MINIO_ENDPOINT $MINIO_ACCESS_KEY $MINIO_SECRET_KEY) do echo '...waiting...' && sleep 1; done;
+          /usr/bin/mc mb --ignore-existing myminio/state-storage;
+          /usr/bin/mc policy set public myminio/state-storage;"]
+      env:
+        - name: MINIO_ACCESS_KEY
+          value: {{ .Values.minio.auth.rootUser }}
+        - name: MINIO_SECRET_KEY
+          value: {{ .Values.minio.auth.rootPassword }}
+        - name: MINIO_ENDPOINT
+          value: {{ .Values.minio.endpoint }}
+{{ end }}

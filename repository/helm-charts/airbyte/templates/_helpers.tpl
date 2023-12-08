@@ -177,10 +177,14 @@ Add environment variables to configure database values
 Add environment variables to configure database values
 */}}
 {{- define "airbyte.database.url" -}}
+{{- if .Values.externalDatabase.jdbcUrl -}}
+{{- .Values.externalDatabase.jdbcUrl -}}
+{{- else -}}
 {{- $host := (include "airbyte.database.host" .) -}}
 {{- $dbName := (include "airbyte.database.name" .) -}}
 {{- $port := (include "airbyte.database.port" . ) -}}
 {{- printf "jdbc:postgresql://%s:%s/%s" $host $port $dbName -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -197,7 +201,7 @@ Add environment variables to configure minio
 */}}
 {{- define "airbyte.minio.endpoint" -}}
 {{- if .Values.global.logs.minio.enabled -}}
-    {{- printf "http://%s:%d" "airbyte-minio-svc" 9000 -}}
+    {{- .Values.minio.endpoint -}}
 {{- else if .Values.global.logs.externalMinio.endpoint -}}
     {{- .Values.global.logs.externalMinio.endpoint -}}
 {{- else if .Values.global.logs.externalMinio.enabled -}}
@@ -244,16 +248,23 @@ Returns the Airbyte Webapp Image
 {{- end -}}
 
 {{/*
-Returns the Airbyte podSweeper Image
+Returns the Airbyte PodSweeper Image
 */}}
 {{- define "airbyte.podSweeperImage" -}}
 {{- include "common.images.image" (dict "imageRoot" .Values.podSweeper.image "global" .Values.global) -}}
 {{- end -}}
 
 {{/*
-Returns the Airbyte worker Image
+Returns the Airbyte Worker Image
 */}}
 {{- define "airbyte.workerImage" -}}
+{{- include "common.images.image" (dict "imageRoot" .Values.worker.image "global" .Values.global) -}}
+{{- end -}}
+
+{{/*
+Returns the Airbyte Workload Launcher Image
+*/}}
+{{- define "airbyte.workloadLauncherImage" -}}
 {{- include "common.images.image" (dict "imageRoot" .Values.worker.image "global" .Values.global) -}}
 {{- end -}}
 

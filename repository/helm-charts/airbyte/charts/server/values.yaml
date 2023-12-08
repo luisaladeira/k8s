@@ -6,6 +6,10 @@ global:
   secretName: ""
   credVolumeOverride: ""
   extraContainers: []
+  ## extraSelectorLables [object] - use to specify own additional selector labels for deployment
+  extraSelectorLabels: {}
+  ## extraLabels [object] - use to specify own additional labels for deployment
+  extraLabels: {}
   database:
     secretName: ""
     secretValue: ""
@@ -74,6 +78,10 @@ image:
 ##
 podAnnotations: {}
 
+##  podLabels [object] Add extra labels to the server pod
+##
+podLabels: {}
+
 ##  containerSecurityContext Security context for the container
 ## Examples:
 ## containerSecurityContext:
@@ -93,7 +101,7 @@ containerSecurityContext: {}
 ##
 livenessProbe:
   enabled: true
-  initialDelaySeconds: 30
+  initialDelaySeconds: 60
   periodSeconds: 10
   timeoutSeconds: 1
   failureThreshold: 3
@@ -108,7 +116,7 @@ livenessProbe:
 ##
 readinessProbe:
   enabled: true
-  initialDelaySeconds: 10
+  initialDelaySeconds: 30
   periodSeconds: 10
   timeoutSeconds: 1
   failureThreshold: 3
@@ -396,7 +404,19 @@ secrets: {}
 #   ACTIVITY_INITIAL_DELAY_BETWEEN_ATTEMPTS_SECONDS:
 #   ACTIVITY_MAX_DELAY_BETWEEN_ATTEMPTS_SECONDS:
 #   WORKFLOW_FAILURE_RESTART_DELAY_SECONDS:
-
-#   USE_STREAM_CAPABLE_STATE: true
 env_vars: {}
 
+
+## extraSelectorLables [object] - use to specify own additional selector labels for deployment
+extraSelectorLabels: {}
+## extraLabels [object] - use to specify own additional labels for deployment
+extraLabels: {}
+
+
+## deploymentStrategyType [string] - deployment strategy type for airbyte-server deployment.
+## Defaults to Recreate since the pod is using pvc
+deploymentStrategyType: Recreate
+
+debug:
+  enabled: false
+  remoteDebugPort: 5005

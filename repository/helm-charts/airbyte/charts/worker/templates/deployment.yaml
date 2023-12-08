@@ -1,19 +1,30 @@
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "common.names.fullname" . }}
   labels:
     {{- include "airbyte.labels" . | nindent 4 }}
+    {{- if .Values.extraLabels }}
+    {{ toYaml (mergeOverwrite .Values.extraLabels .Values.global.extraLabels) | nindent 4 }}
+    {{- end }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
       {{- include "airbyte.selectorLabels" . | nindent 6 }}
+      {{- if .Values.extraSelectorLabels }}
+      {{ toYaml (mergeOverwrite .Values.extraSelectorLabels .Values.global.extraSelectorLabels) | nindent 6 }}
+      {{- end }}
   template:
     metadata:
       labels:
         {{- include "airbyte.selectorLabels" . | nindent 8 }}
+        {{- if .Values.extraSelectorLabels }}
+        {{ toYaml (mergeOverwrite .Values.extraSelectorLabels .Values.global.extraSelectorLabels) | nindent 8 }}
+        {{- end }}
+        {{- if .Values.podLabels }}
+          {{- include "common.tplvalues.render" (dict "value" .Values.podLabels "context" $) | nindent 8 }}
+        {{- end }}
       {{- if .Values.podAnnotations }}
       annotations:
         {{- include "common.tplvalues.render" (dict "value" .Values.podAnnotations "context" $) | nindent 8 }}
@@ -45,6 +56,10 @@ spec:
         image: {{ printf "%s:%s" .Values.image.repository (include "worker.imageTag" .) }}
         imagePullPolicy: "{{ .Values.image.pullPolicy }}"
         env:
+        {{- if .Values.debug.enabled }}
+        - name: JAVA_TOOL_OPTIONS
+          value: "-Xdebug -agentlib:jdwp=transport=dt_socket,address=0.0.0.0:{{ .Values.debug.remoteDebugPort }},server=y,suspend=n"
+        {{- end}}
         {{- if eq .Values.global.deploymentMode "oss"  }}
         - name: AIRBYTE_VERSION
           valueFrom:
@@ -81,6 +96,11 @@ spec:
             secretKeyRef:
               name: {{ .Release.Name }}-airbyte-secrets
               key: DATABASE_USER
+        - name: SEGMENT_WRITE_KEY
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-airbyte-env
+              key: SEGMENT_WRITE_KEY
         - name: TRACKING_STRATEGY
           valueFrom:
             configMapKeyRef:
@@ -119,12 +139,21 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: JOB_KUBE_SERVICEACCOUNT
+          value: {{ .Values.global.serviceAccountName }}
         {{- if $.Values.global.jobs.kube.annotations }}
         - name: JOB_KUBE_ANNOTATIONS
           valueFrom:
             configMapKeyRef:
               name: {{ .Release.Name }}-airbyte-env
               key: JOB_KUBE_ANNOTATIONS
+        {{- end }}
+        {{- if $.Values.global.jobs.kube.labels }}
+        - name: JOB_KUBE_LABELS
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-airbyte-env
+              key: JOB_KUBE_LABELS
         {{- end }}
         {{- if $.Values.global.jobs.kube.nodeSelector }}
         - name: JOB_KUBE_NODE_SELECTORS
@@ -139,6 +168,27 @@ spec:
             configMapKeyRef:
               name: {{ .Release.Name }}-airbyte-env
               key: JOB_KUBE_TOLERATIONS
+        {{- end }}
+        {{- if $.Values.global.jobs.kube.images.busybox }}
+        - name: JOB_KUBE_BUSYBOX_IMAGE
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-airbyte-env
+              key: JOB_KUBE_BUSYBOX_IMAGE
+        {{- end }}
+        {{- if $.Values.global.jobs.kube.images.socat }}
+        - name: JOB_KUBE_SOCAT_IMAGE
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-airbyte-env
+              key: JOB_KUBE_SOCAT_IMAGE
+        {{- end }}
+        {{- if $.Values.global.jobs.kube.images.curl }}
+        - name: JOB_KUBE_CURL_IMAGE
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-airbyte-env
+              key: JOB_KUBE_CURL_IMAGE
         {{- end }}
         {{- if $.Values.global.jobs.kube.main_container_image_pull_secret }}
         - name: JOB_KUBE_MAIN_CONTAINER_IMAGE_PULL_SECRET
@@ -248,6 +298,16 @@ spec:
             configMapKeyRef:
               name: {{ .Release.Name }}-airbyte-env
               key: INTERNAL_API_HOST
+        - name: WORKLOAD_API_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-airbyte-env
+              key: WORKLOAD_API_HOST
+        - name: WORKLOAD_API_BEARER_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.global.database.secretName | default (printf "%s-airbyte-secrets" .Release.Name ) }}
+              key: {{ .Values.global.database.secretValue | default "WORKLOAD_API_BEARER_TOKEN" }}
         - name: CONFIGS_DATABASE_MINIMUM_FLYWAY_MIGRATION_VERSION
           valueFrom:
             configMapKeyRef:
@@ -293,11 +353,6 @@ spec:
             configMapKeyRef:
               name: {{ .Release.Name }}-airbyte-env
               key: AUTO_DETECT_SCHEMA
-        - name: USE_STREAM_CAPABLE_STATE
-          valueFrom:
-            configMapKeyRef:
-              name: {{ .Release.Name }}-airbyte-env
-              key: USE_STREAM_CAPABLE_STATE
         - name: SHOULD_RUN_NOTIFY_WORKFLOWS
           valueFrom:
             configMapKeyRef:
@@ -318,6 +373,12 @@ spec:
             configMapKeyRef:
               name: {{ .Release.Name }}-airbyte-env
               key: WORKER_STATE_STORAGE_TYPE
+        {{- if eq .Values.global.edition "pro" }}
+        - name: AIRBYTE_API_AUTH_HEADER_NAME
+          value: "X-Airbyte-Auth"
+        - name: AIRBYTE_API_AUTH_HEADER_VALUE
+          value: "Internal worker"
+        {{- end }}
 
         {{- end }}
         # Values from secret
@@ -332,7 +393,7 @@ spec:
         {{- end }}
 
         # Values from env
-        {{- if .Values.env_vars }}
+        {{- if or .Values.env_vars .Values.global.env_vars }}
         {{- range $k, $v := mergeOverwrite .Values.env_vars .Values.global.env_vars }}
         - name: {{ $k }}
           value: {{ $v | quote }}
@@ -367,6 +428,11 @@ spec:
           failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
         {{- end }}
         ports:
+        {{- if .Values.debug.enabled }}
+        - name: debug
+          containerPort: {{ .Values.debug.remoteDebugPort }}
+          protocol: TCP
+        {{- end}}
         - name: heartbeat
           containerPort: 9000 # for heartbeat server
         - containerPort: 9001 # start temporal worker port pool

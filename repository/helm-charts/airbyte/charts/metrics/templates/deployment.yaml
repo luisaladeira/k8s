@@ -21,6 +21,9 @@ spec:
     metadata:
       labels:
         airbyte: metrics
+        {{- if .Values.podLabels }}
+          {{- include "common.tplvalues.render" (dict "value" .Values.podLabels "context" $) | nindent 8 }}
+        {{- end }}
       {{- if .Values.podAnnotations }}
       annotations:
         {{- include "common.tplvalues.render" (dict "value" .Values.podAnnotations "context" $) | nindent 8 }}
@@ -56,8 +59,8 @@ spec:
         - name: DATABASE_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ .Values.global.database.secretName | default (include "airbyte.chart" .) }}
-              key: {{ .Values.global.database.secretValue | default "postgresql-password" }}
+              name: {{ .Values.global.database.secretName | default (printf "%s-airbyte-secrets" .Release.Name ) }}
+              key: {{ .Values.global.database.secretValue | default "DATABASE_PASSWORD" }}
         - name: DATABASE_URL
           valueFrom:
             configMapKeyRef:
@@ -96,7 +99,7 @@ spec:
         {{- end }}
 
         # Values from env
-        {{- if .Values.env_vars }}
+        {{- if or .Values.env_vars .Values.global.env_vars }}
         {{- range $k, $v := mergeOverwrite .Values.env_vars .Values.global.env_vars }}
         - name: {{ $k }}
           value: {{ $v | quote }}

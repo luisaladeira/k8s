@@ -5,17 +5,29 @@ metadata:
   name: {{ include "common.names.fullname" . }}
   labels:
     {{- include "airbyte.labels" . | nindent 4 }}
+    {{- if .Values.extraLabels }}
+    {{ toYaml (mergeOverwrite .Values.extraLabels .Values.global.extraLabels) | nindent 4 }}
+    {{- end }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
       {{- include "airbyte.selectorLabels" . | nindent 6 }}
+      {{- if .Values.extraSelectorLabels }}
+      {{ toYaml (mergeOverwrite .Values.extraSelectorLabels .Values.global.extraSelectorLabels) | nindent 6 }}
+      {{- end }}
   strategy:
-    type: Recreate # Needed due to volume claims
+    type: {{ .Values.deploymentStrategyType }} # Needed due to volume claims
   template:
     metadata:
       labels:
         {{- include "airbyte.selectorLabels" . | nindent 8 }}
+        {{- if .Values.extraSelectorLabels }}
+        {{ toYaml (mergeOverwrite .Values.extraSelectorLabels .Values.global.extraSelectorLabels) | nindent 8 }}
+        {{- end }}
+        {{- if .Values.podLabels }}
+          {{- include "common.tplvalues.render" (dict "value" .Values.podLabels "context" $) | nindent 8 }}
+        {{- end }}
       {{- if .Values.podAnnotations }}
       annotations:
         {{- include "common.tplvalues.render" (dict "value" .Values.podAnnotations "context" $) | nindent 8 }}
@@ -46,12 +58,21 @@ spec:
         image: {{ printf "%s:%s" .Values.image.repository (include "server.imageTag" .) }}
         imagePullPolicy: "{{ .Values.image.pullPolicy }}"
         env:
+        {{- if .Values.debug.enabled }}
+        - name: JAVA_TOOL_OPTIONS
+          value: "-Xdebug -agentlib:jdwp=transport=dt_socket,address=0.0.0.0:{{ .Values.debug.remoteDebugPort }},server=y,suspend=n"
+        {{- end}}
         {{- if eq .Values.global.deploymentMode "oss"  }}
         - name: AIRBYTE_VERSION
           valueFrom:
             configMapKeyRef:
               name: {{ .Release.Name }}-airbyte-env
               key: AIRBYTE_VERSION
+        - name: AIRBYTE_EDITION
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-airbyte-env
+              key: AIRBYTE_EDITION
         - name: AUTO_DETECT_SCHEMA
           valueFrom:
             configMapKeyRef:
@@ -77,6 +98,11 @@ spec:
             secretKeyRef:
               name: {{ .Release.Name }}-airbyte-secrets
               key: DATABASE_USER
+        - name: SEGMENT_WRITE_KEY
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-airbyte-env
+              key: SEGMENT_WRITE_KEY
         - name: TRACKING_STRATEGY
           valueFrom:
             configMapKeyRef:
@@ -163,6 +189,26 @@ spec:
             configMapKeyRef:
               name: {{ .Release.Name }}-airbyte-env
               key: S3_MINIO_ENDPOINT
+        - name: STATE_STORAGE_MINIO_BUCKET_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-airbyte-env
+              key: STATE_STORAGE_MINIO_BUCKET_NAME
+        - name: STATE_STORAGE_MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-airbyte-secrets
+              key: STATE_STORAGE_MINIO_ACCESS_KEY
+        - name: STATE_STORAGE_MINIO_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-airbyte-secrets
+              key: STATE_STORAGE_MINIO_SECRET_ACCESS_KEY
+        - name: STATE_STORAGE_MINIO_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-airbyte-env
+              key: STATE_STORAGE_MINIO_ENDPOINT
         - name: S3_PATH_STYLE_ACCESS
           valueFrom:
             configMapKeyRef:
@@ -188,6 +234,21 @@ spec:
             configMapKeyRef:
               name: {{ .Release.Name }}-airbyte-env
               key: JOBS_DATABASE_MINIMUM_FLYWAY_MIGRATION_VERSION
+        - name: WORKER_LOGS_STORAGE_TYPE
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-airbyte-env
+              key: WORKER_LOGS_STORAGE_TYPE
+        - name: WORKER_STATE_STORAGE_TYPE
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-airbyte-env
+              key: WORKER_STATE_STORAGE_TYPE
+        - name: KEYCLOAK_INTERNAL_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Release.Name }}-airbyte-env
+              key: KEYCLOAK_INTERNAL_HOST
         {{- end }}
         # Values from secret
         {{- if .Values.secrets }}
@@ -201,7 +262,7 @@ spec:
         {{- end }}
 
         # Values from env
-        {{- if .Values.env_vars }}
+        {{- if or .Values.env_vars .Values.global.env_vars }}
         {{- range $k, $v := mergeOverwrite .Values.env_vars .Values.global.env_vars }}
         - name: {{ $k }}
           value: {{ $v | quote }}
@@ -239,6 +300,11 @@ spec:
         - name: http
           containerPort: 8001
           protocol: TCP
+        {{- if .Values.debug.enabled }}
+        - name: debug
+          containerPort: {{ .Values.debug.remoteDebugPort }}
+          protocol: TCP
+        {{- end}}
         {{- if .Values.resources }}
         resources: {{- toYaml .Values.resources | nindent 10 }}
         {{- end }}
@@ -250,6 +316,9 @@ spec:
         - name: gcs-log-creds-volume
           mountPath: /secrets/gcs-log-creds
           readOnly: true
+        - name: airbyte-yml-volume
+          mountPath: /app/configs/airbyte.yml
+          subPath: fileContents
         {{- end }}
 
         {{- if .Values.extraVolumeMounts }}
@@ -269,6 +338,9 @@ spec:
       - name: gcs-log-creds-volume
         secret:
           secretName: {{ ternary (printf "%s-gcs-log-creds" ( .Release.Name )) (.Values.global.credVolumeOverride) (eq .Values.global.deploymentMode "oss") }}
+      - name: airbyte-yml-volume
+        configMap:
+          name: {{ .Release.Name }}-airbyte-yml
       {{- end }}
       {{- if .Values.extraVolumes }}
 {{ toYaml .Values.extraVolumes | nindent 6 }}
