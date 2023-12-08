@@ -232,7 +232,7 @@ webapp:
 
   service:
     # -- The service type to use for the webapp service
-    type: ClusterIP
+    type: LoadBalancer
     # -- The service port to expose the webapp on
     port: 80
     # -- Annotations for the webapp service resource
