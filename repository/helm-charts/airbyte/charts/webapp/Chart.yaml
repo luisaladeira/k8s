@@ -9,4 +9,4 @@ dependencies:
 description: Helm chart to deploy airbyte-webapp
 name: webapp
 type: application
-version: 0.50.14
+version: 0.50.9

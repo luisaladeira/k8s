@@ -9,4 +9,4 @@ dependencies:
 description: Helm chart to deploy airbyte-metrics
 name: metrics
 type: application
-version: 0.50.14
+version: 0.50.9
