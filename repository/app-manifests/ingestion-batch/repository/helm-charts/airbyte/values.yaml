@@ -1050,7 +1050,7 @@ temporal:
   ##  temporal.service.type The Kubernetes Service Type
   ##  temporal.service.port The temporal port and exposed kubernetes port
   service:
-    type: ClusterIP
+    type: LoadBalancer
     port: 7233
 
   ##  temporal.podAnnotations [object] Add extra annotations to the temporal pod
