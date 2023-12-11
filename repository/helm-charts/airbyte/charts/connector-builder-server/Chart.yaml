@@ -9,4 +9,4 @@ dependencies:
 description: Helm chart to deploy airbyte-connector-builder-server
 name: connector-builder-server
 type: application
-version: 0.50.12
+version: 0.50.14

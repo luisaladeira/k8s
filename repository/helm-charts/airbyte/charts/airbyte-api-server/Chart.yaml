@@ -9,4 +9,4 @@ dependencies:
 description: Helm chart to deploy airbyte-api-server
 name: airbyte-api-server
 type: application
-version: 0.50.12
+version: 0.50.14

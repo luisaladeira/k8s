@@ -90,6 +90,14 @@ kubectl get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" -n
 rm ./repository/helm-charts/airflow -rf |
 helm pull airflow/airflow -d ./repository/helm-charts --untar
 ```
+
+# Remove old version of the chart and install the latest version:
+```bash 
+rm ./repository/helm-charts/airbyte -rf |
+helm pull airbyte/airbyte -d ./repository/helm-charts --untar
+```
+
+
 ```yaml
     service:
         type: LoadBalancer
